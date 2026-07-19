@@ -1,41 +1,55 @@
 git2go
 ======
-[![GoDoc](https://godoc.org/github.com/libgit2/git2go?status.svg)](http://godoc.org/github.com/libgit2/git2go/v34) [![Build Status](https://travis-ci.org/libgit2/git2go.svg?branch=main)](https://travis-ci.org/libgit2/git2go)
+[![GoDoc](https://godoc.org/github.com/northhalf/git2go?status.svg)](https://godoc.org/github.com/northhalf/git2go/v38)
 
 Go bindings for [libgit2](http://libgit2.github.com/).
 
-### Which Go version to use
+This is a maintained fork that tracks libgit2 1.9.x. The upstream
+`libgit2/git2go` repository has not been updated since 2022 and does not support
+libgit2 beyond 1.5. This fork publishes a new Go major version, `/v38`, so
+existing `/v34` consumers can opt in without a forced upgrade.
 
-Due to the fact that Go 1.11 module versions have semantic meaning and don't necessarily align with libgit2's release schedule, please consult the following table for a mapping between libgit2 and git2go module versions:
+### Version mapping
 
-| libgit2 | git2go        |
-|---------|---------------|
-| main    | (will be v35) |
-| 1.5     | v34           |
-| 1.3     | v33           |
-| 1.2     | v32           |
-| 1.1     | v31           |
-| 1.0     | v30           |
-| 0.99    | v29           |
-| 0.28    | v28           |
-| 0.27    | v27           |
+| libgit2 | git2go (this fork) |
+|---------|--------------------|
+| 1.9     | v38                |
 
-You can import them in your project with the version's major number as a suffix. For example, if you have libgit2 v1.2 installed, you'd import git2go v34 with:
+Import it with the major version suffix:
 
 ```sh
-go get github.com/libgit2/git2go/v34
+go get github.com/northhalf/git2go/v38
 ```
 ```go
-import "github.com/libgit2/git2go/v34"
+import "github.com/northhalf/git2go/v38"
 ```
 
-which will ensure there are no sudden changes to the API.
+The `main` branch tracks libgit2 1.9 and only supports statically linking
+against the bundled libgit2 for routine development.
 
-The `main` branch follows the tip of libgit2 itself (with some lag) and as such has no guarantees on the stability of libgit2's API. Thus this only supports statically linking against libgit2.
+### Requirements
 
-### Which branch to send Pull requests to
+- Go 1.25 or newer (tested against Go 1.25 and 1.26).
+- libgit2 1.9.x. The vendored submodule is pinned to v1.9.6.
+- For bundled builds: CMake, `pkg-config`, a C compiler, and Git submodules.
+- SHA-256 repositories are **not** supported. This build uses a fixed 20-byte
+  `Oid` and rejects libgit2 builds with the experimental SHA-256 API enabled.
 
-If there's something version-specific that you'd want to contribute to, you can send them to the `release-${MAJOR}.${MINOR}` branches, which follow libgit2's releases.
+### Migrating from `/v34`
+
+This fork keeps the existing git2go API source-compatible where possible, with
+two behavior changes to be aware of:
+
+- **Checkout zero value**: libgit2 1.9 made `GIT_CHECKOUT_SAFE` the zero value.
+  In `/v38`, `CheckoutOptions{}` performs a safe checkout instead of a dry run.
+  Code that relied on the zero value being a dry run must set
+  `Strategy: CheckoutNone` explicitly.
+- **`UpdateTipsCallback` is deprecated**: libgit2 1.9 prefers the new
+  `update_refs` callback, exposed as `UpdateRefsCallback` (which also receives
+  the matching refspec). `UpdateTipsCallback` still works.
+
+New APIs cover worktrees, staged commits, commit parents, remote push options,
+fetch depth, redirect policy, remote OID type, User-Agent, and server timeouts.
 
 Installing
 ----------
@@ -47,10 +61,10 @@ This project wraps the functionality provided by libgit2. If you're using a vers
 
 ### Versioned branch, dynamic linking
 
-When linking dynamically against a released version of libgit2, install it via your system's package manager. CGo will take care of finding its pkg-config file and set up the linking. Import via Go modules, e.g. to work against libgit2 v1.2
+When linking dynamically against a released version of libgit2, install it via your system's package manager. CGo will take care of finding its pkg-config file and set up the linking. Import via Go modules:
 
 ```go
-import "github.com/libgit2/git2go/v34"
+import "github.com/northhalf/git2go/v38"
 ```
 
 ### Versioned branch, static linking
@@ -65,7 +79,7 @@ Follow the instructions for [Versioned branch, dynamic linking](#versioned-branc
 
 If using `main` or building a branch with the vendored libgit2 statically, we need to build libgit2 first. In order to build it, you need `cmake`, `pkg-config` and a C compiler. You will also need the development packages for OpenSSL (outside of Windows or macOS) and LibSSH2 installed if you want libgit2 to support HTTPS and SSH respectively. Note that even if libgit2 is included in the resulting binary, its dependencies will not be.
 
-Run `go get -d github.com/libgit2/git2go` to download the code and go to your `$GOPATH/src/github.com/libgit2/git2go` directory. From there, we need to build the C code and put it into the resulting go binary.
+Run `go get -d github.com/northhalf/git2go/v38` to download the code. From there, we need to build the C code and put it into the resulting go binary.
 
     git submodule update --init # get libgit2
     make install-static
@@ -78,9 +92,9 @@ In order to let Go pass the correct flags to `pkg-config`, `-tags static` needs 
     go test -tags static github.com/my/project/...
     go install -tags static github.com/my/project/...
 
-One thing to take into account is that since Go expects the `pkg-config` file to be within the same directory where `make install-static` was called, so the `go.mod` file may need to have a [`replace` directive](https://github.com/golang/go/wiki/Modules#when-should-i-use-the-replace-directive) so that the correct setup is achieved. So if `git2go` is checked out at `$GOPATH/src/github.com/libgit2/git2go` and your project at `$GOPATH/src/github.com/my/project`, the `go.mod` file of `github.com/my/project` might need to have a line like
+One thing to take into account is that since Go expects the `pkg-config` file to be within the same directory where `make install-static` was called, so the `go.mod` file may need to have a [`replace` directive](https://github.com/golang/go/wiki/Modules#when-should-i-use-the-replace-directive) so that the correct setup is achieved. So if `git2go` is checked out at `$GOPATH/src/github.com/northhalf/git2go` and your project at `$GOPATH/src/github.com/my/project`, the `go.mod` file of `github.com/my/project` might need to have a line like
 
-    replace github.com/libgit2/git2go/v34 => ../../libgit2/git2go
+    replace github.com/northhalf/git2go/v38 => ../../northhalf/git2go
 
 Parallelism and network operations
 ----------------------------------
