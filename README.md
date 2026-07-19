@@ -1,6 +1,5 @@
 git2go
 ======
-[![GoDoc](https://godoc.org/github.com/northhalf/git2go?status.svg)](https://godoc.org/github.com/northhalf/git2go/v38)
 
 Go bindings for [libgit2](http://libgit2.github.com/).
 
