@@ -144,10 +144,13 @@ type BlameHunk struct {
 	FinalCommitId        *Oid
 	FinalStartLineNumber uint16
 	FinalSignature       *Signature
+	FinalCommitter       *Signature
 	OrigCommitId         *Oid
 	OrigPath             string
 	OrigStartLineNumber  uint16
 	OrigSignature        *Signature
+	OrigCommitter        *Signature
+	Summary              string
 	Boundary             bool
 }
 
@@ -157,10 +160,13 @@ func blameHunkFromC(hunk *C.git_blame_hunk) BlameHunk {
 		FinalCommitId:        newOidFromC(&hunk.final_commit_id),
 		FinalStartLineNumber: uint16(hunk.final_start_line_number),
 		FinalSignature:       newSignatureFromC(hunk.final_signature),
+		FinalCommitter:       newSignatureFromC(hunk.final_committer),
 		OrigCommitId:         newOidFromC(&hunk.orig_commit_id),
 		OrigPath:             C.GoString(hunk.orig_path),
 		OrigStartLineNumber:  uint16(hunk.orig_start_line_number),
 		OrigSignature:        newSignatureFromC(hunk.orig_signature),
+		OrigCommitter:        newSignatureFromC(hunk.orig_committer),
+		Summary:              C.GoString(hunk.summary),
 		Boundary:             hunk.boundary == 1,
 	}
 }

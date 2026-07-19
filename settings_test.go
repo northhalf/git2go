@@ -2,6 +2,7 @@ package git
 
 import (
 	"testing"
+	"time"
 )
 
 type pathPair struct {
@@ -83,6 +84,55 @@ func TestCachedMemory(t *testing.T) {
 
 	if allowed < 0 {
 		t.Fatal("allowed < 0")
+	}
+}
+
+func TestUserAgent(t *testing.T) {
+	original, err := UserAgent()
+	checkFatal(t, err)
+	defer func() { checkFatal(t, SetUserAgent(original)) }()
+
+	const want = "git2go/v38 test"
+	checkFatal(t, SetUserAgent(want))
+	got, err := UserAgent()
+	checkFatal(t, err)
+	if got != want {
+		t.Fatalf("UserAgent() = %q, want %q", got, want)
+	}
+}
+
+func TestServerTimeouts(t *testing.T) {
+	originalConnect, err := ServerConnectTimeout()
+	checkFatal(t, err)
+	defer func() { checkFatal(t, SetServerConnectTimeout(originalConnect)) }()
+	originalServer, err := ServerTimeout()
+	checkFatal(t, err)
+	defer func() { checkFatal(t, SetServerTimeout(originalServer)) }()
+
+	const wantConnect = 2500 * time.Millisecond
+	checkFatal(t, SetServerConnectTimeout(wantConnect))
+	gotConnect, err := ServerConnectTimeout()
+	checkFatal(t, err)
+	if gotConnect != wantConnect {
+		t.Fatalf("ServerConnectTimeout() = %v, want %v", gotConnect, wantConnect)
+	}
+
+	const wantServer = 4500 * time.Millisecond
+	checkFatal(t, SetServerTimeout(wantServer))
+	gotServer, err := ServerTimeout()
+	checkFatal(t, err)
+	if gotServer != wantServer {
+		t.Fatalf("ServerTimeout() = %v, want %v", gotServer, wantServer)
+	}
+
+	if err := SetServerTimeout(-time.Millisecond); err == nil {
+		t.Fatal("SetServerTimeout accepted a negative duration")
+	}
+}
+
+func TestFeatureBackend(t *testing.T) {
+	if backend := FeatureBackend(FeatureSHA1); backend == "" {
+		t.Fatal("FeatureBackend(FeatureSHA1) is empty")
 	}
 }
 

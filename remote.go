@@ -6,7 +6,7 @@ package git
 #include <git2.h>
 #include <git2/sys/cred.h>
 
-extern void _go_git_populate_remote_callbacks(git_remote_callbacks *callbacks);
+extern void _go_git_populate_remote_callbacks(git_remote_callbacks *callbacks, int use_update_refs);
 */
 import "C"
 import (
@@ -74,6 +74,7 @@ type CompletionCallback func(RemoteCompletion) error
 type CredentialsCallback func(url string, username_from_url string, allowed_types CredentialType) (*Credential, error)
 type TransferProgressCallback func(stats TransferProgress) error
 type UpdateTipsCallback func(refname string, a *Oid, b *Oid) error
+type UpdateRefsCallback func(refname string, a *Oid, b *Oid, refspec *Refspec) error
 type CertificateCheckCallback func(cert *Certificate, valid bool, hostname string) error
 type PackbuilderProgressCallback func(stage int32, current, total uint32) error
 type PushTransferProgressCallback func(current, total uint32, bytes uint) error
@@ -85,6 +86,7 @@ type RemoteCallbacks struct {
 	CredentialsCallback
 	TransferProgressCallback
 	UpdateTipsCallback
+	UpdateRefsCallback
 	CertificateCheckCallback
 	PackProgressCallback PackbuilderProgressCallback
 	PushTransferProgressCallback
@@ -95,6 +97,14 @@ type remoteCallbacksData struct {
 	callbacks   *RemoteCallbacks
 	errorTarget *error
 }
+
+type RemoteRedirect uint
+
+const (
+	RemoteRedirectNone    RemoteRedirect = C.GIT_REMOTE_REDIRECT_NONE
+	RemoteRedirectInitial RemoteRedirect = C.GIT_REMOTE_REDIRECT_INITIAL
+	RemoteRedirectAll     RemoteRedirect = C.GIT_REMOTE_REDIRECT_ALL
+)
 
 type FetchPrune uint
 
@@ -123,6 +133,11 @@ const (
 	DownloadTagsAll DownloadTags = C.GIT_REMOTE_DOWNLOAD_TAGS_ALL
 )
 
+const (
+	FetchDepthFull      = int(C.GIT_FETCH_DEPTH_FULL)
+	FetchDepthUnshallow = int(C.GIT_FETCH_DEPTH_UNSHALLOW)
+)
+
 type FetchOptions struct {
 	// Callbacks to use for this fetch operation
 	RemoteCallbacks RemoteCallbacks
@@ -139,6 +154,11 @@ type FetchOptions struct {
 	// The default is to auto-follow tags.
 	DownloadTags DownloadTags
 
+	// Depth limits the fetch history. Zero fetches the full history.
+	Depth int
+
+	FollowRedirects RemoteRedirect
+
 	// Headers are extra headers for the fetch operation.
 	Headers []string
 
@@ -147,13 +167,17 @@ type FetchOptions struct {
 }
 
 type RemoteConnectOptions struct {
-	// Proxy options to use for this fetch operation
-	ProxyOptions ProxyOptions
+	RemoteCallbacks RemoteCallbacks
+	ProxyOptions    ProxyOptions
+	FollowRedirects RemoteRedirect
+	Headers         []string
 }
 
 func remoteConnectOptionsFromC(copts *C.git_remote_connect_options) *RemoteConnectOptions {
 	return &RemoteConnectOptions{
-		ProxyOptions: proxyOptionsFromC(&copts.proxy_opts),
+		ProxyOptions:    proxyOptionsFromC(&copts.proxy_opts),
+		FollowRedirects: RemoteRedirect(copts.follow_redirects),
+		Headers:         makeStringsFromCStrings(copts.custom_headers.strings, int(copts.custom_headers.count)),
 	}
 }
 
@@ -305,6 +329,11 @@ type PushOptions struct {
 
 	// Proxy options to use for this push operation
 	ProxyOptions ProxyOptions
+
+	FollowRedirects RemoteRedirect
+
+	// RemotePushOptions are sent to the remote receive-pack process.
+	RemotePushOptions []string
 }
 
 type RemoteHead struct {
@@ -331,7 +360,7 @@ func populateRemoteCallbacks(ptr *C.git_remote_callbacks, callbacks *RemoteCallb
 	if callbacks == nil {
 		return ptr
 	}
-	C._go_git_populate_remote_callbacks(ptr)
+	C._go_git_populate_remote_callbacks(ptr, cbool(callbacks.UpdateRefsCallback != nil))
 	data := &remoteCallbacksData{
 		callbacks:   callbacks,
 		errorTarget: errorTarget,
@@ -436,6 +465,36 @@ func updateTipsCallback(
 	a := newOidFromC(_a)
 	b := newOidFromC(_b)
 	err := data.callbacks.UpdateTipsCallback(refname, a, b)
+	if err != nil {
+		if data.errorTarget != nil {
+			*data.errorTarget = err
+		}
+		return setCallbackError(errorMessage, err)
+	}
+	return C.int(ErrorCodeOK)
+}
+
+//export updateRefsCallback
+func updateRefsCallback(
+	errorMessage **C.char,
+	_refname *C.char,
+	_a *C.git_oid,
+	_b *C.git_oid,
+	_refspec *C.git_refspec,
+	handle unsafe.Pointer,
+) C.int {
+	data := pointerHandles.Get(handle).(*remoteCallbacksData)
+	if data.callbacks.UpdateRefsCallback == nil {
+		return C.int(ErrorCodeOK)
+	}
+	refname := C.GoString(_refname)
+	a := newOidFromC(_a)
+	b := newOidFromC(_b)
+	var refspec *Refspec
+	if _refspec != nil {
+		refspec = &Refspec{ptr: _refspec}
+	}
+	err := data.callbacks.UpdateRefsCallback(refname, a, b, refspec)
 	if err != nil {
 		if data.errorTarget != nil {
 			*data.errorTarget = err
@@ -685,7 +744,7 @@ func (c *RemoteCollection) Create(name string, url string) (*Remote, error) {
 	return remote, nil
 }
 
-//CreateWithOptions Creates a repository object with extended options.
+// CreateWithOptions Creates a repository object with extended options.
 func (c *RemoteCollection) CreateWithOptions(url string, option *RemoteCreateOptions) (*Remote, error) {
 	remote := &Remote{repo: c.repo}
 
@@ -985,6 +1044,8 @@ func populateFetchOptions(copts *C.git_fetch_options, opts *FetchOptions, errorT
 	copts.prune = C.git_fetch_prune_t(opts.Prune)
 	copts.update_fetchhead = ucbool(opts.UpdateFetchhead)
 	copts.download_tags = C.git_remote_autotag_option_t(opts.DownloadTags)
+	copts.depth = C.int(opts.Depth)
+	copts.follow_redirects = C.git_remote_redirect_t(opts.FollowRedirects)
 
 	copts.custom_headers = C.git_strarray{
 		count:   C.size_t(len(opts.Headers)),
@@ -1016,6 +1077,11 @@ func populatePushOptions(copts *C.git_push_options, opts *PushOptions, errorTarg
 	}
 	populateRemoteCallbacks(&copts.callbacks, &opts.RemoteCallbacks, errorTarget)
 	populateProxyOptions(&copts.proxy_opts, &opts.ProxyOptions)
+	copts.follow_redirects = C.git_remote_redirect_t(opts.FollowRedirects)
+	copts.remote_push_options = C.git_strarray{
+		count:   C.size_t(len(opts.RemotePushOptions)),
+		strings: makeCStringsFromStrings(opts.RemotePushOptions),
+	}
 	return copts
 }
 
@@ -1025,6 +1091,7 @@ func freePushOptions(copts *C.git_push_options) {
 	}
 	untrackCallbacksPayload(&copts.callbacks)
 	freeStrarray(&copts.custom_headers)
+	freeStrarray(&copts.remote_push_options)
 	freeProxyOptions(&copts.proxy_opts)
 }
 
@@ -1062,6 +1129,49 @@ func (o *Remote) Fetch(refspecs []string, opts *FetchOptions, msg string) error 
 		return MakeGitError(ret)
 	}
 
+	return nil
+}
+
+func populateRemoteConnectOptions(copts *C.git_remote_connect_options, opts *RemoteConnectOptions, errorTarget *error) *C.git_remote_connect_options {
+	C.git_remote_connect_options_init(copts, C.GIT_REMOTE_CONNECT_OPTIONS_VERSION)
+	if opts == nil {
+		return copts
+	}
+	populateRemoteCallbacks(&copts.callbacks, &opts.RemoteCallbacks, errorTarget)
+	populateProxyOptions(&copts.proxy_opts, &opts.ProxyOptions)
+	copts.follow_redirects = C.git_remote_redirect_t(opts.FollowRedirects)
+	copts.custom_headers = C.git_strarray{
+		count:   C.size_t(len(opts.Headers)),
+		strings: makeCStringsFromStrings(opts.Headers),
+	}
+	return copts
+}
+
+func freeRemoteConnectOptions(copts *C.git_remote_connect_options) {
+	if copts == nil {
+		return
+	}
+	untrackCallbacksPayload(&copts.callbacks)
+	freeProxyOptions(&copts.proxy_opts)
+	freeStrarray(&copts.custom_headers)
+}
+
+func (o *Remote) ConnectWithOptions(direction ConnectDirection, opts *RemoteConnectOptions) error {
+	var err error
+	copts := populateRemoteConnectOptions(&C.git_remote_connect_options{}, opts, &err)
+	defer freeRemoteConnectOptions(copts)
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ret := C.git_remote_connect_ext(o.ptr, C.git_direction(direction), copts)
+	runtime.KeepAlive(o)
+	if ret == C.int(ErrorCodeUser) && err != nil {
+		return err
+	}
+	if ret < 0 {
+		return MakeGitError(ret)
+	}
 	return nil
 }
 
@@ -1106,6 +1216,20 @@ func (o *Remote) Connect(direction ConnectDirection, callbacks *RemoteCallbacks,
 		return MakeGitError(ret)
 	}
 	return nil
+}
+
+func (o *Remote) OidType() (OidType, error) {
+	var oidType C.git_oid_t
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ret := C.git_remote_oid_type(&oidType, o.ptr)
+	runtime.KeepAlive(o)
+	if ret < 0 {
+		return 0, MakeGitError(ret)
+	}
+	return OidType(oidType), nil
 }
 
 func (o *Remote) Disconnect() {

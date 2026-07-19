@@ -76,3 +76,26 @@ func (repo *Repository) DefaultSignature() (*Signature, error) {
 
 	return newSignatureFromC(out), nil
 }
+
+// DefaultSignaturesFromEnv builds author and committer signatures from the
+// GIT_AUTHOR_* and GIT_COMMITTER_* environment variables, falling back to the
+// repository configuration when an environment variable is absent. This
+// mirrors libgit2's git_signature_default_from_env, which produces separate
+// author and committer signatures.
+func (repo *Repository) DefaultSignaturesFromEnv() (*Signature, *Signature, error) {
+	var author, committer *C.git_signature
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ret := C.git_signature_default_from_env(&author, &committer, repo.ptr)
+	runtime.KeepAlive(repo)
+	if ret < 0 {
+		return nil, nil, MakeGitError(ret)
+	}
+
+	defer C.git_signature_free(author)
+	defer C.git_signature_free(committer)
+
+	return newSignatureFromC(author), newSignatureFromC(committer), nil
+}

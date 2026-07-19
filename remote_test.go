@@ -233,6 +233,61 @@ func TestRemotePrune(t *testing.T) {
 	}
 }
 
+func TestRemoteOptionsV19(t *testing.T) {
+	_ = FetchOptions{
+		Depth:           1,
+		FollowRedirects: RemoteRedirectInitial,
+	}
+	_ = PushOptions{
+		FollowRedirects:   RemoteRedirectAll,
+		RemotePushOptions: []string{"ci.skip"},
+	}
+	_ = RemoteConnectOptions{
+		FollowRedirects: RemoteRedirectNone,
+		Headers:         []string{"X-Test: true"},
+	}
+}
+
+func TestRemoteUpdateRefsAndOidType(t *testing.T) {
+	remoteRepo := createTestRepo(t)
+	defer cleanupTestRepo(t, remoteRepo)
+	seedTestRepo(t, remoteRepo)
+
+	repo := createTestRepo(t)
+	defer cleanupTestRepo(t, repo)
+	remote, err := repo.Remotes.Create("origin", "file://"+remoteRepo.Workdir())
+	checkFatal(t, err)
+	defer remote.Free()
+
+	called := false
+	opts := &FetchOptions{
+		RemoteCallbacks: RemoteCallbacks{
+			UpdateRefsCallback: func(refname string, old, new *Oid, refspec *Refspec) error {
+				called = true
+				if refname == "" {
+					t.Fatal("update_refs refname is empty")
+				}
+				if refspec == nil || refspec.String() == "" {
+					t.Fatal("update_refs refspec is empty")
+				}
+				return nil
+			},
+		},
+	}
+	checkFatal(t, remote.Fetch([]string{"+refs/heads/master:refs/remotes/origin/master"}, opts, "fetch"))
+	if !called {
+		t.Fatal("UpdateRefsCallback was not called")
+	}
+
+	checkFatal(t, remote.ConnectWithOptions(ConnectDirectionFetch, &RemoteConnectOptions{}))
+	defer remote.Disconnect()
+	oidType, err := remote.OidType()
+	checkFatal(t, err)
+	if oidType != OidTypeSHA1 {
+		t.Fatalf("Remote.OidType() = %v, want %v", oidType, OidTypeSHA1)
+	}
+}
+
 func TestRemoteCredentialsCalled(t *testing.T) {
 	t.Parallel()
 

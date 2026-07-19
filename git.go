@@ -45,8 +45,16 @@ const (
 	ErrorClassFilter     ErrorClass = C.GIT_ERROR_FILTER
 	ErrorClassRevert     ErrorClass = C.GIT_ERROR_REVERT
 	ErrorClassCallback   ErrorClass = C.GIT_ERROR_CALLBACK
+	ErrorClassCherrypick ErrorClass = C.GIT_ERROR_CHERRYPICK
+	ErrorClassDescribe   ErrorClass = C.GIT_ERROR_DESCRIBE
 	ErrorClassRebase     ErrorClass = C.GIT_ERROR_REBASE
+	ErrorClassFilesystem ErrorClass = C.GIT_ERROR_FILESYSTEM
 	ErrorClassPatch      ErrorClass = C.GIT_ERROR_PATCH
+	ErrorClassWorktree   ErrorClass = C.GIT_ERROR_WORKTREE
+	ErrorClassSHA        ErrorClass = C.GIT_ERROR_SHA
+	ErrorClassHTTP       ErrorClass = C.GIT_ERROR_HTTP
+	ErrorClassInternal   ErrorClass = C.GIT_ERROR_INTERNAL
+	ErrorClassGrafts     ErrorClass = C.GIT_ERROR_GRAFTS
 )
 
 //go:generate stringer -type ErrorCode -trimprefix ErrorCode -tags static
@@ -119,6 +127,16 @@ const (
 	ErrorCodeIndexDirty ErrorCode = C.GIT_EINDEXDIRTY
 	// ErrorCodeApplyFail represents that a patch application failed.
 	ErrorCodeApplyFail ErrorCode = C.GIT_EAPPLYFAIL
+	// ErrorCodeOwner represents that the object is not owned by the current user.
+	ErrorCodeOwner ErrorCode = C.GIT_EOWNER
+	// ErrorCodeTimeout represents that the operation timed out.
+	ErrorCodeTimeout ErrorCode = C.GIT_TIMEOUT
+	// ErrorCodeUnchanged represents that there were no changes to commit.
+	ErrorCodeUnchanged ErrorCode = C.GIT_EUNCHANGED
+	// ErrorCodeNotSupported represents that an option is not supported.
+	ErrorCodeNotSupported ErrorCode = C.GIT_ENOTSUPPORTED
+	// ErrorCodeReadOnly represents that the subject is read-only.
+	ErrorCodeReadOnly ErrorCode = C.GIT_EREADONLY
 )
 
 var (
@@ -192,6 +210,13 @@ func ReInit() {
 	Shutdown()
 	initLibGit2()
 }
+
+type OidType uint
+
+const (
+	OidTypeSHA1   OidType = C.GIT_OID_SHA1
+	OidTypeSHA256 OidType = 2
+)
 
 // Oid represents the id for a Git object.
 type Oid [20]byte

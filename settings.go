@@ -32,10 +32,33 @@ int _go_git_opts_get_size_t_size_t(int opt, size_t *val1, size_t *val2)
 {
     return git_libgit2_opts(opt, val1, val2);
 }
+
+int _go_git_opts_get_buf(int opt, git_buf *buf)
+{
+    return git_libgit2_opts(opt, buf);
+}
+
+int _go_git_opts_set_string(int opt, const char *value)
+{
+    return git_libgit2_opts(opt, value);
+}
+
+int _go_git_opts_get_int(int opt, int *value)
+{
+    return git_libgit2_opts(opt, value);
+}
+
+int _go_git_opts_set_int(int opt, int value)
+{
+    return git_libgit2_opts(opt, value);
+}
 */
 import "C"
 import (
+	"errors"
+	"math"
 	"runtime"
+	"time"
 	"unsafe"
 )
 
@@ -67,6 +90,30 @@ func SetSearchPath(level ConfigLevel, path string) error {
 	}
 
 	return nil
+}
+
+func UserAgent() (string, error) {
+	return getString(C.GIT_OPT_GET_USER_AGENT)
+}
+
+func SetUserAgent(userAgent string) error {
+	return setString(C.GIT_OPT_SET_USER_AGENT, userAgent)
+}
+
+func ServerConnectTimeout() (time.Duration, error) {
+	return getDuration(C.GIT_OPT_GET_SERVER_CONNECT_TIMEOUT)
+}
+
+func SetServerConnectTimeout(timeout time.Duration) error {
+	return setDuration(C.GIT_OPT_SET_SERVER_CONNECT_TIMEOUT, timeout)
+}
+
+func ServerTimeout() (time.Duration, error) {
+	return getDuration(C.GIT_OPT_GET_SERVER_TIMEOUT)
+}
+
+func SetServerTimeout(timeout time.Duration) error {
+	return setDuration(C.GIT_OPT_SET_SERVER_TIMEOUT, timeout)
 }
 
 func MwindowSize() (int, error) {
@@ -131,6 +178,65 @@ func SetCacheObjectLimit(objectType ObjectType, size int) error {
 		return MakeGitError(err)
 	}
 
+	return nil
+}
+
+func getString(opt C.int) (string, error) {
+	var buf C.git_buf
+	defer C.git_buf_dispose(&buf)
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ret := C._go_git_opts_get_buf(opt, &buf)
+	if ret < 0 {
+		return "", MakeGitError(ret)
+	}
+	return C.GoString(buf.ptr), nil
+}
+
+func setString(opt C.int, value string) error {
+	cvalue := C.CString(value)
+	defer C.free(unsafe.Pointer(cvalue))
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ret := C._go_git_opts_set_string(opt, cvalue)
+	if ret < 0 {
+		return MakeGitError(ret)
+	}
+	return nil
+}
+
+func getDuration(opt C.int) (time.Duration, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	var milliseconds C.int
+	ret := C._go_git_opts_get_int(opt, &milliseconds)
+	if ret < 0 {
+		return 0, MakeGitError(ret)
+	}
+	return time.Duration(milliseconds) * time.Millisecond, nil
+}
+
+func setDuration(opt C.int, value time.Duration) error {
+	if value < 0 {
+		return errors.New("duration must not be negative")
+	}
+	milliseconds := value.Milliseconds()
+	if milliseconds > math.MaxInt32 {
+		return errors.New("duration exceeds libgit2's millisecond range")
+	}
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ret := C._go_git_opts_set_int(opt, C.int(milliseconds))
+	if ret < 0 {
+		return MakeGitError(ret)
+	}
 	return nil
 }
 

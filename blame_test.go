@@ -47,6 +47,15 @@ func TestBlame(t *testing.T) {
 
 	hunk1, err := blame.HunkByIndex(0)
 	checkFatal(t, err)
+	if hunk1.FinalCommitter == nil {
+		t.Fatal("FinalCommitter is nil")
+	}
+	if hunk1.OrigCommitter == nil {
+		t.Fatal("OrigCommitter is nil")
+	}
+	if hunk1.Summary != "This is a commit" {
+		t.Fatalf("Summary = %q, want %q", hunk1.Summary, "This is a commit")
+	}
 	checkHunk(t, "index 0", hunk1, wantHunk1)
 
 	hunk2, err := blame.HunkByIndex(1)
@@ -65,8 +74,14 @@ func TestBlame(t *testing.T) {
 func checkHunk(t *testing.T, label string, hunk, want BlameHunk) {
 	hunk.FinalSignature = nil
 	want.FinalSignature = nil
+	hunk.FinalCommitter = nil
+	want.FinalCommitter = nil
 	hunk.OrigSignature = nil
 	want.OrigSignature = nil
+	hunk.OrigCommitter = nil
+	want.OrigCommitter = nil
+	hunk.Summary = ""
+	want.Summary = ""
 	if !reflect.DeepEqual(hunk, want) {
 		t.Fatalf("%s: got hunk %+v, want %+v", label, hunk, want)
 	}

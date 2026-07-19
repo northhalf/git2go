@@ -19,6 +19,14 @@ const (
 
 	// libgit2 was built with nanosecond support for files
 	FeatureNSec Feature = C.GIT_FEATURE_NSEC
+
+	FeatureHTTPParser  Feature = C.GIT_FEATURE_HTTP_PARSER
+	FeatureRegex       Feature = C.GIT_FEATURE_REGEX
+	FeatureI18N        Feature = C.GIT_FEATURE_I18N
+	FeatureAuthNTLM    Feature = C.GIT_FEATURE_AUTH_NTLM
+	FeatureNegotiate   Feature = C.GIT_FEATURE_AUTH_NEGOTIATE
+	FeatureCompression Feature = C.GIT_FEATURE_COMPRESSION
+	FeatureSHA1        Feature = C.GIT_FEATURE_SHA1
 )
 
 // Features returns a bit-flag of Feature values indicating which features the
@@ -27,4 +35,13 @@ func Features() Feature {
 	features := C.git_libgit2_features()
 
 	return Feature(features)
+}
+
+// FeatureBackend returns the backend name for a compiled libgit2 feature.
+func FeatureBackend(feature Feature) string {
+	backend := C.git_libgit2_feature_backend(C.git_feature_t(feature))
+	if backend == nil {
+		return ""
+	}
+	return C.GoString(backend)
 }

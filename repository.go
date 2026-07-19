@@ -5,6 +5,9 @@ package git
 #include <git2/sys/repository.h>
 #include <git2/sys/commit.h>
 #include <string.h>
+
+extern void _go_git_commit_create_options_init(git_commit_create_options *opts);
+extern void _go_git_commit_create_options_set_allow_empty(git_commit_create_options *opts, int allow);
 */
 import "C"
 import (
@@ -650,6 +653,147 @@ func (v *Repository) CreateCommitFromIds(
 	}
 
 	return oid, nil
+}
+
+// CommitCreateOptions controls how Repository.CreateCommitFromStage builds a
+// commit. A nil Author, Committer, or MessageEncoding requests libgit2's
+// default for that field.
+type CommitCreateOptions struct {
+	// AllowEmpty permits a commit with no changes from its parent.
+	AllowEmpty bool
+
+	// Author is the commit author, or nil for the default.
+	Author *Signature
+
+	// Committer is the commit committer, or nil for the default.
+	Committer *Signature
+
+	// MessageEncoding is the commit message encoding, or empty for UTF-8.
+	MessageEncoding MessageEncoding
+}
+
+func populateCommitCreateOptions(copts *C.git_commit_create_options, opts *CommitCreateOptions) (*C.git_commit_create_options, error) {
+	C._go_git_commit_create_options_init(copts)
+	if opts == nil {
+		return copts, nil
+	}
+
+	C._go_git_commit_create_options_set_allow_empty(copts, cbool(opts.AllowEmpty))
+
+	var cencoding *C.char
+	if opts.MessageEncoding != "" && opts.MessageEncoding != MessageEncodingUTF8 {
+		cencoding = C.CString(string(opts.MessageEncoding))
+	}
+	copts.message_encoding = cencoding
+
+	if opts.Author != nil {
+		authorSig, err := opts.Author.toC()
+		if err != nil {
+			C.free(unsafe.Pointer(cencoding))
+			return nil, err
+		}
+		copts.author = authorSig
+	}
+	if opts.Committer != nil {
+		committerSig, err := opts.Committer.toC()
+		if err != nil {
+			C.free(unsafe.Pointer(cencoding))
+			if copts.author != nil {
+				C.git_signature_free(copts.author)
+			}
+			return nil, err
+		}
+		copts.committer = committerSig
+	}
+	return copts, nil
+}
+
+func freeCommitCreateOptions(copts *C.git_commit_create_options) {
+	if copts == nil {
+		return
+	}
+	if copts.message_encoding != nil {
+		C.free(unsafe.Pointer(copts.message_encoding))
+	}
+	if copts.author != nil {
+		C.git_signature_free(copts.author)
+	}
+	if copts.committer != nil {
+		C.git_signature_free(copts.committer)
+	}
+}
+
+// CreateCommitFromStage commits the currently staged changes, mirroring
+// `git commit -m message`. By default, empty commits are rejected. It returns
+// the new commit's OID, or an error wrapping ErrorCodeUnchanged when there are
+// no staged changes to commit.
+func (v *Repository) CreateCommitFromStage(message string, opts *CommitCreateOptions) (*Oid, error) {
+	cmsg := C.CString(message)
+	defer C.free(unsafe.Pointer(cmsg))
+
+	copts, err := populateCommitCreateOptions(&C.git_commit_create_options{}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer freeCommitCreateOptions(copts)
+
+	oid := new(Oid)
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ret := C.git_commit_create_from_stage(oid.toC(), v.ptr, cmsg, copts)
+	runtime.KeepAlive(v)
+	runtime.KeepAlive(oid)
+	if ret < 0 {
+		return nil, MakeGitError(ret)
+	}
+
+	return oid, nil
+}
+
+// CommitParents returns the commits that would be the parents of the next
+// commit, based on the repository state. This is normally the HEAD commit, but
+// during a merge it may return multiple commits. The caller owns each returned
+// commit and must free it.
+func (v *Repository) CommitParents() ([]*Commit, error) {
+	var commits C.git_commitarray
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ret := C.git_repository_commit_parents(&commits, v.ptr)
+	runtime.KeepAlive(v)
+	if ret < 0 {
+		return nil, MakeGitError(ret)
+	}
+
+	count := int(commits.count)
+	parents := make([]*Commit, 0, count)
+	for i := 0; i < count; i++ {
+		var dup *C.git_commit
+		csource := *(**C.git_commit)(unsafe.Pointer(uintptr(unsafe.Pointer(commits.commits)) + uintptr(i)*unsafe.Sizeof(commits.commits)))
+		dupRet := C.git_commit_dup(&dup, csource)
+		if dupRet < 0 {
+			for _, parent := range parents {
+				parent.Free()
+			}
+			C.git_commitarray_dispose(&commits)
+			return nil, MakeGitError(dupRet)
+		}
+		parents = append(parents, allocCommit(dup, v))
+	}
+	C.git_commitarray_dispose(&commits)
+	return parents, nil
+}
+
+// OidType returns the object ID type used by the repository. This build of
+// git2go only supports SHA-1 repositories; other types are rejected when the
+// repository is opened.
+func (v *Repository) OidType() OidType {
+	oidType := C.git_repository_oid_type(v.ptr)
+	runtime.KeepAlive(v)
+	return OidType(oidType)
 }
 
 func (v *Odb) Free() {

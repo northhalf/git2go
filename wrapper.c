@@ -117,6 +117,17 @@ void _go_git_populate_apply_callbacks(git_apply_options *options)
 	options->hunk_cb = (git_apply_hunk_cb)&hunkApplyCallback;
 }
 
+void _go_git_commit_create_options_init(git_commit_create_options *opts)
+{
+	git_commit_create_options init = GIT_COMMIT_CREATE_OPTIONS_INIT;
+	*opts = init;
+}
+
+void _go_git_commit_create_options_set_allow_empty(git_commit_create_options *opts, int allow)
+{
+	opts->allow_empty_commit = allow ? 1 : 0;
+}
+
 static int commit_create_callback(
 		git_oid *out,
 		const git_signature *author,
@@ -297,6 +308,25 @@ static int update_tips_callback(const char *refname, const git_oid *a, const git
 	return set_callback_error(error_message, ret);
 }
 
+static int update_refs_callback(
+		const char *refname,
+		const git_oid *a,
+		const git_oid *b,
+		git_refspec *refspec,
+		void *data)
+{
+	char *error_message = NULL;
+	const int ret = updateRefsCallback(
+			&error_message,
+			(char *)refname,
+			(git_oid *)a,
+			(git_oid *)b,
+			refspec,
+			data
+	);
+	return set_callback_error(error_message, ret);
+}
+
 static int certificate_check_callback(git_cert *cert, int valid, const char *host, void *data)
 {
 	char *error_message = NULL;
@@ -352,13 +382,15 @@ static int push_update_reference_callback(const char *refname, const char *statu
 	return set_callback_error(error_message, ret);
 }
 
-void _go_git_populate_remote_callbacks(git_remote_callbacks *callbacks)
+void _go_git_populate_remote_callbacks(git_remote_callbacks *callbacks, int use_update_refs)
 {
 	callbacks->sideband_progress = sideband_progress_callback;
 	callbacks->completion = completion_callback;
 	callbacks->credentials = credentials_callback;
 	callbacks->transfer_progress = transfer_progress_callback;
 	callbacks->update_tips = update_tips_callback;
+	if (use_update_refs)
+		callbacks->update_refs = update_refs_callback;
 	callbacks->certificate_check = certificate_check_callback;
 	callbacks->pack_progress = pack_progress_callback;
 	callbacks->push_transfer_progress = push_transfer_progress_callback;

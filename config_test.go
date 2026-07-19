@@ -108,6 +108,29 @@ func TestConfigLookups(t *testing.T) {
 	}
 }
 
+func TestConfigEntryMetadata(t *testing.T) {
+	config, err := setupConfig()
+	defer cleanupConfig()
+	checkFatal(t, err)
+	defer config.Free()
+
+	iter, err := config.NewIterator()
+	checkFatal(t, err)
+	defer iter.Free()
+
+	entry, err := iter.Next()
+	checkFatal(t, err)
+	if entry.BackendType != "file" {
+		t.Fatalf("BackendType = %q, want file", entry.BackendType)
+	}
+	if entry.OriginPath == "" {
+		t.Fatal("OriginPath is empty")
+	}
+	if entry.IncludeDepth != 0 {
+		t.Fatalf("IncludeDepth = %d, want 0", entry.IncludeDepth)
+	}
+}
+
 func TestOpenDefault(t *testing.T) {
 
 	c, err := OpenDefault()

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -92,6 +93,68 @@ func TestCreateCommitFromIds(t *testing.T) {
 
 	if !expectedCommitId.Equal(commitId) {
 		t.Errorf("mismatched commit ids, expected %v, got %v", expectedCommitId.String(), commitId.String())
+	}
+}
+
+func TestCreateCommitFromStageAndParents(t *testing.T) {
+	repo := createTestRepo(t)
+	defer cleanupTestRepo(t, repo)
+	seedTestRepo(t, repo)
+
+	checkFatal(t, os.WriteFile(repo.Workdir()+"README", []byte("staged change\n"), 0644))
+	index, err := repo.Index()
+	checkFatal(t, err)
+	defer index.Free()
+	checkFatal(t, index.AddByPath("README"))
+	checkFatal(t, index.Write())
+
+	sig := signature()
+	oid, err := repo.CreateCommitFromStage("staged commit", &CommitCreateOptions{
+		Author:    sig,
+		Committer: sig,
+	})
+	checkFatal(t, err)
+
+	commit, err := repo.LookupCommit(oid)
+	checkFatal(t, err)
+	defer commit.Free()
+	if commit.Summary() != "staged commit" {
+		t.Fatalf("commit summary = %q, want staged commit", commit.Summary())
+	}
+
+	parents, err := repo.CommitParents()
+	checkFatal(t, err)
+	defer func() {
+		for _, parent := range parents {
+			parent.Free()
+		}
+	}()
+	if len(parents) != 1 || !parents[0].Id().Equal(oid) {
+		t.Fatalf("CommitParents() returned %d unexpected parents", len(parents))
+	}
+
+	oidType := repo.OidType()
+	if oidType != OidTypeSHA1 {
+		t.Fatalf("Repository.OidType() = %v, want %v", oidType, OidTypeSHA1)
+	}
+}
+
+func TestDefaultSignaturesFromEnv(t *testing.T) {
+	repo := createTestRepo(t)
+	defer cleanupTestRepo(t, repo)
+
+	t.Setenv("GIT_AUTHOR_NAME", "Author Name")
+	t.Setenv("GIT_AUTHOR_EMAIL", "author@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Committer Name")
+	t.Setenv("GIT_COMMITTER_EMAIL", "committer@example.com")
+
+	author, committer, err := repo.DefaultSignaturesFromEnv()
+	checkFatal(t, err)
+	if author.Name != "Author Name" || author.Email != "author@example.com" {
+		t.Fatalf("author = %+v", author)
+	}
+	if committer.Name != "Committer Name" || committer.Email != "committer@example.com" {
+		t.Fatalf("committer = %+v", committer)
 	}
 }
 

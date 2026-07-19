@@ -35,29 +35,26 @@ func _() {
 	_ = x[ErrorClassFilter-24]
 	_ = x[ErrorClassRevert-25]
 	_ = x[ErrorClassCallback-26]
+	_ = x[ErrorClassCherrypick-27]
+	_ = x[ErrorClassDescribe-28]
 	_ = x[ErrorClassRebase-29]
+	_ = x[ErrorClassFilesystem-30]
 	_ = x[ErrorClassPatch-31]
+	_ = x[ErrorClassWorktree-32]
+	_ = x[ErrorClassSHA-33]
+	_ = x[ErrorClassHTTP-34]
+	_ = x[ErrorClassInternal-35]
+	_ = x[ErrorClassGrafts-36]
 }
 
-const (
-	_ErrorClass_name_0 = "NoneNoMemoryOSInvalidReferenceZlibRepositoryConfigRegexOdbIndexObjectNetTagTreeIndexerSSLSubmoduleThreadStashCheckoutFetchHeadMergeSSHFilterRevertCallback"
-	_ErrorClass_name_1 = "Rebase"
-	_ErrorClass_name_2 = "Patch"
-)
+const _ErrorClass_name = "NoneNoMemoryOSInvalidReferenceZlibRepositoryConfigRegexOdbIndexObjectNetTagTreeIndexerSSLSubmoduleThreadStashCheckoutFetchHeadMergeSSHFilterRevertCallbackCherrypickDescribeRebaseFilesystemPatchWorktreeSHAHTTPInternalGrafts"
 
-var (
-	_ErrorClass_index_0 = [...]uint8{0, 4, 12, 14, 21, 30, 34, 44, 50, 55, 58, 63, 69, 72, 75, 79, 86, 89, 98, 104, 109, 117, 126, 131, 134, 140, 146, 154}
-)
+var _ErrorClass_index = [...]uint8{0, 4, 12, 14, 21, 30, 34, 44, 50, 55, 58, 63, 69, 72, 75, 79, 86, 89, 98, 104, 109, 117, 126, 131, 134, 140, 146, 154, 164, 172, 178, 188, 193, 201, 204, 208, 216, 222}
 
 func (i ErrorClass) String() string {
-	switch {
-	case 0 <= i && i <= 26:
-		return _ErrorClass_name_0[_ErrorClass_index_0[i]:_ErrorClass_index_0[i+1]]
-	case i == 29:
-		return _ErrorClass_name_1
-	case i == 31:
-		return _ErrorClass_name_2
-	default:
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_ErrorClass_index)-1 {
 		return "ErrorClass(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
+	return _ErrorClass_name[_ErrorClass_index[idx]:_ErrorClass_index[idx+1]]
 }
