@@ -983,7 +983,7 @@ func populateFetchOptions(copts *C.git_fetch_options, opts *FetchOptions, errorT
 	}
 	populateRemoteCallbacks(&copts.callbacks, &opts.RemoteCallbacks, errorTarget)
 	copts.prune = C.git_fetch_prune_t(opts.Prune)
-	copts.update_fetchhead = cbool(opts.UpdateFetchhead)
+	copts.update_fetchhead = ucbool(opts.UpdateFetchhead)
 	copts.download_tags = C.git_remote_autotag_option_t(opts.DownloadTags)
 
 	copts.custom_headers = C.git_strarray{

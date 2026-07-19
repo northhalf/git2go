@@ -1,8 +1,16 @@
 package git
 
 import (
+	"bytes"
+	"io"
 	"io/ioutil"
+	"net/http"
+	"net/http/cgi"
+	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -72,16 +80,48 @@ func TestCloneWithCallback(t *testing.T) {
 	defer remote.Free()
 }
 
-// TestCloneWithExternalHTTPUrl
-func TestCloneWithExternalHTTPUrl(t *testing.T) {
+func startGitHTTPServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	execPath, err := exec.Command("git", "--exec-path").Output()
+	checkFatal(t, err)
+	backend := filepath.Join(strings.TrimSpace(string(execPath)), "git-http-backend")
+	projectRoot, err := filepath.Abs("testdata")
+	checkFatal(t, err)
+
+	cgiHandler := &cgi.Handler{
+		Path: backend,
+		Dir:  projectRoot,
+		Env: []string{
+			"GIT_PROJECT_ROOT=" + projectRoot,
+			"GIT_HTTP_EXPORT_ALL=1",
+		},
+	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(r.TransferEncoding) > 0 {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			r.ContentLength = int64(len(body))
+			r.TransferEncoding = nil
+		}
+		cgiHandler.ServeHTTP(w, r)
+	})
+	return httptest.NewServer(handler)
+}
+
+func TestCloneWithHTTPUrl(t *testing.T) {
+	server := startGitHTTPServer(t)
+	defer server.Close()
 
 	path, err := ioutil.TempDir("", "git2go")
+	checkFatal(t, err)
 	defer os.RemoveAll(path)
 
-	// clone the repo
-	url := "https://github.com/libgit2/TestGitRepository"
-	_, err = Clone(url, path, &CloneOptions{})
-	if err != nil {
-		t.Fatal("cannot clone remote repo via https, error: ", err)
-	}
+	repo, err := Clone(server.URL+"/TestGitRepository.git", path, &CloneOptions{})
+	checkFatal(t, err)
+	defer repo.Free()
 }

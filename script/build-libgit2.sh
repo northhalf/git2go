@@ -16,7 +16,7 @@ if [ "$#" -eq "0" ]; then
 fi
 
 ROOT=${ROOT-"$(cd "$(dirname "$0")/.." && echo "${PWD}")"}
-VENDORED_PATH=${VENDORED_PATH-"${ROOT}/vendor/libgit2"}
+VENDORED_PATH=${VENDORED_PATH-"${ROOT}/third_party/libgit2"}
 BUILD_SYSTEM=OFF
 
 while [ $# -gt 0 ]; do
@@ -51,11 +51,8 @@ if [ -n "${BUILD_LIBGIT_REF}" ]; then
 	trap "git submodule update --init" EXIT
 fi
 
-BUILD_DEPRECATED_HARD="ON"
 if [ "${BUILD_SYSTEM}" = "ON" ]; then
 	BUILD_INSTALL_PREFIX=${SYSTEM_INSTALL_PREFIX-"/usr"}
-	# Most system-wide installations won't intentionally omit deprecated symbols.
-	BUILD_DEPRECATED_HARD="OFF"
 else
 	BUILD_INSTALL_PREFIX="${BUILD_PATH}/install"
 	mkdir -p "${BUILD_PATH}/install/lib"
@@ -68,8 +65,8 @@ fi
 
 mkdir -p "${BUILD_PATH}/build" &&
 cd "${BUILD_PATH}/build" &&
-cmake -DTHREADSAFE=ON \
-      -DBUILD_CLAR=OFF \
+cmake -DBUILD_TESTS=OFF \
+      -DBUILD_CLI=OFF \
       -DBUILD_SHARED_LIBS"=${BUILD_SHARED_LIBS}" \
       -DREGEX_BACKEND=builtin \
       -DUSE_BUNDLED_ZLIB="${USE_BUNDLED_ZLIB}" \
@@ -79,7 +76,7 @@ cmake -DTHREADSAFE=ON \
       -DCMAKE_BUILD_TYPE="RelWithDebInfo" \
       -DCMAKE_INSTALL_PREFIX="${BUILD_INSTALL_PREFIX}" \
       -DCMAKE_INSTALL_LIBDIR="lib" \
-      -DDEPRECATE_HARD="${BUILD_DEPRECATE_HARD}" \
+      -DDEPRECATE_HARD=OFF \
       "${VENDORED_PATH}"
 
 if which make nproc >/dev/null && [ -f Makefile ]; then

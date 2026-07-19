@@ -64,6 +64,7 @@ func createTestRepo(t *testing.T) *Repository {
 	checkFatal(t, err)
 	repo, err := InitRepository(path, false)
 	checkFatal(t, err)
+	checkFatal(t, repo.SetHead("refs/heads/master"))
 
 	tmpfile := "README"
 	err = ioutil.WriteFile(path+"/"+tmpfile, []byte("foo\n"), 0644)

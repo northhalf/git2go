@@ -4,6 +4,7 @@
 #include <git2/sys/odb_backend.h>
 #include <git2/sys/refdb_backend.h>
 #include <git2/sys/cred.h>
+#include <git2/sys/errors.h>
 
 // There are two ways in which to declare a callback:
 //

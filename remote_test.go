@@ -447,7 +447,7 @@ func TestRemoteSSH(t *testing.T) {
 	t.Parallel()
 	pubKeyUsername := "testuser"
 
-	hostPrivKey, err := rsa.GenerateKey(rand.Reader, 512)
+	hostPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("Failed to generate the host RSA private key: %v", err)
 	}
@@ -456,7 +456,7 @@ func TestRemoteSSH(t *testing.T) {
 		t.Fatalf("Failed to generate SSH hostSigner: %v", err)
 	}
 
-	privKey, err := rsa.GenerateKey(rand.Reader, 512)
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("Failed to generate the user RSA private key: %v", err)
 	}
